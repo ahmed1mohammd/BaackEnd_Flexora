@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+}
+
+model Gym {
+  id        String   @id @default(uuid())
+  name      String
+  ownerName String
+  email     String   @unique
+  address         String?
+  status          String    @default("pending") // pending, active, freeze, suspended
+  subscriptionEnd DateTime? // When the SaaS subscription expires
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  users              User[]
+  members            Member[]
+  packages           Package[]
+  financialLogs      FinancialLog[]
+  maintenanceTickets MaintenanceTicket[]
+  attendances        Attendance[]
+  platformPayments   PlatformFinancialLog[]
+}
+
+model User {
+  id          String   @id @default(uuid())
+  gymId       String
+  name        String
+  email       String   @unique
+  phoneNumber String?
+  password    String
+  role        String   // Platform-Owner, Gym-Owner, Receptionist, Coach
+  baseSalary  Float?   @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  gym Gym @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  
+  assignedMembers Member[]  @relation("CoachToMember")
+}
+
+model Member {
+  id              String    @id @default(uuid())
+  gymId           String
+  name            String
+  phoneNumber     String
+  trainingType    String    // General, Private
+  coachId         String?
+  qrCode          String    @unique @default(uuid())
+  status          String    @default("expired") // expired, active, frozen
+  subscriptionEnd DateTime?
+  activePackageId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  gym   Gym   @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  coach User? @relation("CoachToMember", fields: [coachId], references: [id])
+  activePackage Package? @relation(fields: [activePackageId], references: [id])
+  attendances Attendance[]
+}
+
+model Package {
+  id             String   @id @default(uuid())
+  gymId          String
+  name           String
+  durationInDays Int
+  price          Float
+  type           String   // Gym, PT
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  gym Gym @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  members Member[]
+}
+
+
+
+model FinancialLog {
+  id          String   @id @default(uuid())
+  gymId       String
+  type        String   // income, expense
+  category    String   // subscription, pt_coaching, salary, maintenance, utility, other
+  amount      Float
+  description String
+  refId       String?
+  createdAt   DateTime @default(now())
+
+  gym Gym @relation(fields: [gymId], references: [id], onDelete: Cascade)
+}
+
+model MaintenanceTicket {
+  id          String   @id @default(uuid())
+  gymId       String
+  equipment   String
+  issue       String
+  cost        Float    @default(0)
+  status      String   @default("open") // open, in_progress, resolved
+  createdAt   DateTime @default(now())
+  resolvedAt  DateTime?
+
+  gym Gym @relation(fields: [gymId], references: [id], onDelete: Cascade)
+}
+
+model Attendance {
+  id          String   @id @default(uuid())
+  gymId       String
+  memberId    String
+  checkInTime DateTime @default(now())
+
+  gym Gym @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+}
+
+model PlatformFinancialLog {
+  id          String   @id @default(uuid())
+  gymId       String
+  amount      Float
+  description String
+  createdAt   DateTime @default(now())
+
+  gym Gym @relation(fields: [gymId], references: [id], onDelete: Cascade)
+}
