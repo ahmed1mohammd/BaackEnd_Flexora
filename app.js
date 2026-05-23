@@ -47,6 +47,19 @@ app.get('/', (req, res) => {
 app.use('/admin', adminRoutes);
 app.use('/user', userRoutes);
 
+// Public Settings Route (For Landing Page)
+const prisma = require('./prisma/client');
+const catchAsync = require('./utils/catchAsync');
+app.get('/public/settings', catchAsync(async (req, res, next) => {
+  let settings = await prisma.platformSettings.findUnique({
+    where: { id: 'default' }
+  });
+  if (!settings) {
+    settings = await prisma.platformSettings.create({ data: { id: 'default' } });
+  }
+  res.status(200).json({ status: 'success', data: { settings } });
+}));
+
 // Handle undefined routes
 app.all('*', (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));

@@ -17,6 +17,10 @@ model Gym {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  // Quotas (Limits)
+  maxReceptionists Int      @default(1)
+  maxCoaches       Int      @default(4)
+
   users              User[]
   members            Member[]
   packages           Package[]
@@ -24,6 +28,7 @@ model Gym {
   maintenanceTickets MaintenanceTicket[]
   attendances        Attendance[]
   platformPayments   PlatformFinancialLog[]
+  activityLogs       ActivityLog[]
 }
 
 model User {
@@ -41,6 +46,7 @@ model User {
   gym Gym @relation(fields: [gymId], references: [id], onDelete: Cascade)
   
   assignedMembers Member[]  @relation("CoachToMember")
+  activityLogs    ActivityLog[]
 }
 
 model Member {
@@ -54,6 +60,7 @@ model Member {
   status          String    @default("expired") // expired, active, frozen
   subscriptionEnd DateTime?
   activePackageId String?
+  gender          String    @default("Male") // Male, Female
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -123,4 +130,71 @@ model PlatformFinancialLog {
   createdAt   DateTime @default(now())
 
   gym Gym @relation(fields: [gymId], references: [id], onDelete: Cascade)
+}
+
+model SaasPlan {
+  id             String   @id @default(uuid())
+  planName       String
+  durationInDays Int
+  price          Float
+  description    String?  @default("")
+  features       String[] @default([])
+  maxReceptionists Int    @default(1)
+  maxCoaches       Int    @default(4)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// Activity Log System (Audit Logs)
+model ActivityLog {
+  id          String   @id @default(uuid())
+  gymId       String?  // Nullable because some actions are platform-level
+  userId      String   // Who performed the action
+  action      String   // e.g. "CREATE_PLAN", "ACTIVATE_GYM"
+  details     String   // Human-readable details
+  createdAt   DateTime @default(now())
+
+  gym         Gym?     @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// SAAS PLATFORM EXPENSES
+// ==========================================
+model PlatformExpense {
+  id          String   @id @default(uuid())
+  amount      Float
+  category    String   // e.g., Hosting, Marketing, Salaries, Other
+  description String
+  createdAt   DateTime @default(now())
+}
+
+// ==========================================
+// SAAS: PLATFORM SETTINGS MATRIX
+// ==========================================
+model PlatformSettings {
+  id               String   @id @default("default")
+  supportEmail     String   @default("support@flexora.com")
+  supportPhone     String   @default("")
+  
+  // روابط وسائل التواصل الاجتماعي
+  facebookUrl      String   @default("")
+  whatsappUrl      String   @default("")
+  instagramUrl     String   @default("")
+  snapchatUrl      String   @default("")
+  linkedinUrl      String   @default("")
+  
+  // أزرار التحكم في الظهور (On/Off Switch Matrix)
+  showFacebook     Boolean  @default(true)
+  showWhatsapp     Boolean  @default(true)
+  showInstagram    Boolean  @default(true)
+  showSnapchat     Boolean  @default(false)
+  showLinkedin     Boolean  @default(false)
+  
+  // الملف الضريبي والقانوني المصري
+  taxNumber        String   @default("")
+  commercialRecord String   @default("")
+  showLegalFooter  Boolean  @default(false)
+  
+  updatedAt        DateTime @updatedAt
 }

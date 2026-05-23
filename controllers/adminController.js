@@ -29,19 +29,151 @@ exports.adminLogin = catchAsync(async (req, res, next) => {
     return next(new AppError('Incorrect email or password', 401));
   }
 
-  if (user.role !== 'Platform-Owner') {
-    return next(new AppError('Only Platform-Owners can access this route.', 403));
+  if (user.role !== 'Platform-Owner' && user.role !== 'Platform-Manager') {
+    return next(new AppError('Only Platform-Owners and Managers can access this route.', 403));
   }
 
   const token = signToken(user.id);
 
   res.status(200).json({
     status: 'success',
-    token
+    token,
+    data: {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    }
   });
 });
 
 // ==========================================
+// UPDATE PASSWORD
+// ==========================================
+exports.updatePassword = catchAsync(async (req, res, next) => {
+  const { oldPassword, newPassword } = req.body;
+
+  if (!oldPassword || !newPassword) {
+    return next(new AppError('Please provide old and new password', 400));
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+
+  if (!user || !(await bcrypt.compare(oldPassword, user.password))) {
+    return next(new AppError('كلمة المرور القديمة غير صحيحة', 401));
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+  await prisma.user.update({
+    where: { id: req.user.id },
+    data: { password: hashedPassword }
+  });
+
+  res.status(200).json({
+    status: 'success',
+    message: 'تم تحديث كلمة المرور بنجاح'
+  });
+});
+
+// ==========================================
+// PLATFORM TEAM MANAGEMENT
+// ==========================================
+
+// GET ALL PLATFORM TEAM MEMBERS
+exports.getPlatformTeam = catchAsync(async (req, res, next) => {
+  const team = await prisma.user.findMany({
+    where: {
+      role: {
+        in: ['Platform-Owner', 'Platform-Manager']
+      }
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      createdAt: true
+    }
+  });
+
+  res.status(200).json({
+    status: 'success',
+    results: team.length,
+    data: { team }
+  });
+});
+
+// CREATE PLATFORM MEMBER (Manager)
+exports.createPlatformMember = catchAsync(async (req, res, next) => {
+  const { name, email, password, role } = req.body;
+
+  if (!name || !email || !password || !role) {
+    return next(new AppError('Please provide name, email, password, and role', 400));
+  }
+
+  if (role !== 'Platform-Owner' && role !== 'Platform-Manager') {
+    return next(new AppError('Role must be Platform-Owner or Platform-Manager', 400));
+  }
+
+  // Check if email exists
+  const existingUser = await prisma.user.findUnique({ where: { email } });
+  if (existingUser) {
+    return next(new AppError('Email already in use', 400));
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 12);
+
+  const newUser = await prisma.user.create({
+    data: {
+      name,
+      email,
+      password: hashedPassword,
+      role,
+      gymId: req.user.gymId // Tie to the same system gym ID
+    }
+  });
+
+  res.status(201).json({
+    status: 'success',
+    data: {
+      user: {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role
+      }
+    }
+  });
+});
+
+// DELETE PLATFORM MEMBER
+exports.deletePlatformMember = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+
+  if (id === req.user.id) {
+    return next(new AppError('You cannot delete your own account', 400));
+  }
+
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user || (user.role !== 'Platform-Owner' && user.role !== 'Platform-Manager')) {
+    return next(new AppError('Team member not found', 404));
+  }
+
+  if (user.email === 'snaptech.team.o@gmail.com') {
+    return next(new AppError('لا يمكن حذف الحساب الأساسي للمنظومة', 403));
+  }
+
+  await prisma.user.delete({ where: { id } });
+
+  res.status(204).json({
+    status: 'success',
+    data: null
+  });
+});
+
 // GYM LISTING & OVERVIEW
 // ==========================================
 // ==========================================
@@ -50,6 +182,10 @@ exports.adminLogin = catchAsync(async (req, res, next) => {
 exports.getAllGyms = catchAsync(async (req, res, next) => {
   const gyms = await prisma.gym.findMany({
     include: {
+      users: {
+        where: { role: 'Gym-Owner' },
+        select: { phoneNumber: true }
+      },
       _count: {
         select: { members: { where: { status: 'active' } } }
       }
@@ -58,7 +194,9 @@ exports.getAllGyms = catchAsync(async (req, res, next) => {
 
   const formattedGyms = gyms.map(gym => ({
     ...gym,
+    phoneNumber: gym.users[0]?.phoneNumber || '—',
     activeMembers: gym._count.members,
+    users: undefined,
     _count: undefined
   }));
 
@@ -191,7 +329,7 @@ exports.getPlatformDashboard = catchAsync(async (req, res, next) => {
   const recentTransactions = await prisma.platformFinancialLog.findMany({
     take: 10,
     orderBy: { createdAt: 'desc' },
-    include: { gym: { select: { name: true } } }
+    include: { gym: { select: { name: true, ownerName: true, email: true, maxReceptionists: true, maxCoaches: true, subscriptionEnd: true } } }
   });
 
   res.status(200).json({
@@ -202,5 +340,278 @@ exports.getPlatformDashboard = catchAsync(async (req, res, next) => {
       activeGyms,
       recentTransactions
     }
+  });
+});
+
+// ==========================================
+// SAAS PLANS MANAGEMENT
+// ==========================================
+
+// ==========================================
+// CREATE SAAS PLAN
+// ==========================================
+exports.createSaasPlan = catchAsync(async (req, res, next) => {
+  const { planName, durationInDays, price, description, features } = req.body;
+
+  if (!planName || durationInDays === undefined || price === undefined) {
+    return next(new AppError('Please provide planName, durationInDays, and price', 400));
+  }
+
+  const newPlan = await prisma.saasPlan.create({
+    data: {
+      planName,
+      durationInDays: parseInt(durationInDays, 10),
+      price: parseFloat(price),
+      description: description || '',
+      features: Array.isArray(features) ? features : []
+    }
+  });
+
+  res.status(201).json({
+    status: 'success',
+    data: { plan: newPlan }
+  });
+});
+
+// ==========================================
+// GET ALL SAAS PLANS
+// ==========================================
+exports.getSaasPlans = catchAsync(async (req, res, next) => {
+  const plans = await prisma.saasPlan.findMany({
+    orderBy: { price: 'asc' }
+  });
+
+  res.status(200).json({
+    status: 'success',
+    data: { plans }
+  });
+});
+
+// ==========================================
+// UPDATE SAAS PLAN
+// ==========================================
+exports.updateSaasPlan = catchAsync(async (req, res, next) => {
+  const { planId } = req.params;
+  const { planName, durationInDays, price, description, features } = req.body;
+
+  const existing = await prisma.saasPlan.findUnique({ where: { id: planId } });
+  if (!existing) {
+    return next(new AppError('Plan not found', 404));
+  }
+
+  const updated = await prisma.saasPlan.update({
+    where: { id: planId },
+    data: {
+      ...(planName       !== undefined && { planName }),
+      ...(durationInDays !== undefined && { durationInDays: parseInt(durationInDays, 10) }),
+      ...(price          !== undefined && { price: parseFloat(price) }),
+      ...(description    !== undefined && { description }),
+      ...(features       !== undefined && { features: Array.isArray(features) ? features : [] }),
+    }
+  });
+
+  res.status(200).json({
+    status: 'success',
+    data: { plan: updated }
+  });
+});
+
+// ==========================================
+// DELETE SAAS PLAN
+// ==========================================
+exports.deleteSaasPlan = catchAsync(async (req, res, next) => {
+  const { planId } = req.params;
+
+  const existing = await prisma.saasPlan.findUnique({ where: { id: planId } });
+  if (!existing) {
+    return next(new AppError('Plan not found', 404));
+  }
+
+  await prisma.saasPlan.delete({ where: { id: planId } });
+
+  res.status(204).json({
+    status: 'success',
+    data: null
+  });
+});
+
+
+// ==========================================
+// GYM PROFILES & QUOTAS
+// ==========================================
+
+exports.getGymProfile = catchAsync(async (req, res, next) => {
+  const { gymId } = req.params;
+
+  const gym = await prisma.gym.findUnique({
+    where: { id: gymId },
+    include: {
+      users: {
+        select: { id: true, name: true, email: true, role: true, createdAt: true }
+      }
+    }
+  });
+
+  if (!gym) {
+    return next(new AppError('Gym not found', 404));
+  }
+
+  const staff = gym.users.filter(u => u.role === 'Receptionist' || u.role === 'Coach');
+  const owners = gym.users.filter(u => u.role === 'Gym-Owner');
+
+  res.status(200).json({
+    status: 'success',
+    data: { gym, owners, staff }
+  });
+});
+
+exports.updateGymQuota = catchAsync(async (req, res, next) => {
+  const { gymId } = req.params;
+  const { maxReceptionists, maxCoaches } = req.body;
+
+  const gym = await prisma.gym.update({
+    where: { id: gymId },
+    data: { maxReceptionists, maxCoaches }
+  });
+
+  const { logActivity } = require('../utils/activityLogger');
+  await logActivity({
+    userId: req.user.id,
+    gymId: gym.id,
+    action: 'UPDATE_QUOTA',
+    details: `Updated quotas for ${gym.name}: ${maxReceptionists} Receptionists, ${maxCoaches} Coaches`
+  });
+
+  res.status(200).json({
+    status: 'success',
+    data: { gym }
+  });
+});
+
+// ==========================================
+// ACTIVITY LOGS
+// ==========================================
+
+exports.getPlatformActivityLogs = catchAsync(async (req, res, next) => {
+  const logs = await prisma.activityLog.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: {
+      user: { select: { name: true, role: true } },
+      gym: { select: { name: true } }
+    },
+    take: 100
+  });
+
+  res.status(200).json({
+    status: 'success',
+    results: logs.length,
+    data: { logs }
+  });
+});
+
+// ==========================================
+// SAAS PLATFORM EXPENSES
+// ==========================================
+
+exports.getPlatformExpenses = catchAsync(async (req, res, next) => {
+  const expenses = await prisma.platformExpense.findMany({
+    orderBy: { createdAt: 'desc' }
+  });
+
+  const totalExpenses = await prisma.platformExpense.aggregate({
+    _sum: { amount: true }
+  });
+
+  res.status(200).json({
+    status: 'success',
+    results: expenses.length,
+    data: { 
+      expenses, 
+      totalExpenses: totalExpenses._sum.amount || 0 
+    }
+  });
+});
+
+exports.createPlatformExpense = catchAsync(async (req, res, next) => {
+  const { amount, category, description } = req.body;
+
+  if (!amount || !category) {
+    return next(new AppError('Please provide amount and category', 400));
+  }
+
+  const newExpense = await prisma.platformExpense.create({
+    data: {
+      amount: parseFloat(amount),
+      category,
+      description: description || ''
+    }
+  });
+
+  res.status(201).json({
+    status: 'success',
+    data: { expense: newExpense }
+  });
+});
+
+exports.deletePlatformExpense = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+
+  const expense = await prisma.platformExpense.findUnique({ where: { id } });
+  if (!expense) {
+    return next(new AppError('Expense not found', 404));
+  }
+
+  await prisma.platformExpense.delete({ where: { id } });
+
+  res.status(204).json({
+    status: 'success',
+    data: null
+  });
+});
+
+// ==========================================
+// PLATFORM SETTINGS (GLOBAL CONFIGURATION)
+// ==========================================
+exports.getPlatformSettings = catchAsync(async (req, res, next) => {
+  let settings = await prisma.platformSettings.findUnique({
+    where: { id: 'default' }
+  });
+
+  if (!settings) {
+    settings = await prisma.platformSettings.create({
+      data: { id: 'default' }
+    });
+  }
+
+  res.status(200).json({
+    status: 'success',
+    data: { settings }
+  });
+});
+
+exports.updatePlatformSettings = catchAsync(async (req, res, next) => {
+  const allowedFields = [
+    'supportEmail', 'supportPhone', 'facebookUrl', 'whatsappUrl',
+    'instagramUrl', 'snapchatUrl', 'linkedinUrl', 'showFacebook',
+    'showWhatsapp', 'showInstagram', 'showSnapchat', 'showLinkedin',
+    'taxNumber', 'commercialRecord', 'showLegalFooter'
+  ];
+
+  const updateData = {};
+  Object.keys(req.body).forEach(key => {
+    if (allowedFields.includes(key)) {
+      updateData[key] = req.body[key];
+    }
+  });
+
+  const updatedSettings = await prisma.platformSettings.upsert({
+    where: { id: 'default' },
+    update: updateData,
+    create: { id: 'default', ...updateData }
+  });
+
+  res.status(200).json({
+    status: 'success',
+    data: { settings: updatedSettings }
   });
 });

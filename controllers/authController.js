@@ -14,19 +14,32 @@ const signToken = id => {
 // REGISTER
 // ==========================================
 exports.register = catchAsync(async (req, res, next) => {
-  const { gymName, ownerName, email, phoneNumber, password, address } = req.body;
+  const { gymName, ownerName, email, phoneNumber, password, address, planId } = req.body;
 
   // Hash password
   const hashedPassword = await bcrypt.hash(password, 12);
 
   // Prisma Transaction
   const result = await prisma.$transaction(async (tx) => {
+    let maxReceptionists = 1;
+    let maxCoaches = 4;
+
+    if (planId) {
+      const plan = await tx.saasPlan.findUnique({ where: { id: planId } });
+      if (plan) {
+        maxReceptionists = plan.maxReceptionists || 1;
+        maxCoaches = plan.maxCoaches || 4;
+      }
+    }
+
     const newGym = await tx.gym.create({
       data: {
         name: gymName,
         ownerName,
         email,
-        address
+        address,
+        maxReceptionists,
+        maxCoaches
       }
     });
 
@@ -91,6 +104,21 @@ exports.login = catchAsync(async (req, res, next) => {
   const token = signToken(user.id);
   res.status(200).json({
     status: 'success',
-    token
+    token,
+    role: user.role,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role
+    },
+    gym: {
+      id: gym.id,
+      gymName: gym.name,
+      ownerName: gym.ownerName,
+      email: gym.email,
+      address: gym.address,
+      status: gym.status
+    }
   });
 });

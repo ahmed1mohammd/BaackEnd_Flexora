@@ -11,46 +11,77 @@ const router = express.Router();
 // ==========================================
 router.post('/login', adminController.adminLogin);
 
+// ==========================================
+// ROUTE: GET /saas-plans (Public)
+// ==========================================
+router.get('/saas-plans', adminController.getSaasPlans);
+
 // Protect all admin routes below this middleware
 router.use(authMiddleware.protect);
-router.use(authMiddleware.restrictTo('Platform-Owner'));
 
-// Admin Dashboard
-
-// ==========================================
-// ROUTE: /DASHBOARD
-// ==========================================
-router.get('/dashboard', adminController.getPlatformDashboard);
-
-// Admin Gym Management
+// Routes accessible by both Owner and Manager
+const allowBoth = authMiddleware.restrictTo('Platform-Owner', 'Platform-Manager');
+const onlyOwner = authMiddleware.restrictTo('Platform-Owner');
 
 // ==========================================
-// ROUTE: /GYMS
+// TEAM MANAGEMENT (Owner Only)
+// ==========================================
+router.route('/team')
+  .get(onlyOwner, adminController.getPlatformTeam)
+  .post(onlyOwner, adminController.createPlatformMember);
+
+router.delete('/team/:id', onlyOwner, adminController.deletePlatformMember);
+
+// ==========================================
+// SAAS PLANS MANAGEMENT
+// ==========================================
+router.post('/saas-plans', onlyOwner, adminController.createSaasPlan);
+router.put('/saas-plans/:planId', onlyOwner, adminController.updateSaasPlan);
+router.delete('/saas-plans/:planId', onlyOwner, adminController.deleteSaasPlan);
+
+// ==========================================
+// SETTINGS
+// ==========================================
+router.put('/settings/password', allowBoth, adminController.updatePassword);
+router.route('/settings/platform')
+  .get(allowBoth, adminController.getPlatformSettings)
+  .put(onlyOwner, adminController.updatePlatformSettings);
+
+// ==========================================
+// DASHBOARD
+// ==========================================
+router.get('/dashboard', allowBoth, adminController.getPlatformDashboard);
+
+// ==========================================
+// GYM MANAGEMENT
 // ==========================================
 router.route('/gyms')
-  .get(adminController.getAllGyms);
+  .get(allowBoth, adminController.getAllGyms);
 
+router.put('/gyms/:gymId/activate', allowBoth, adminController.activateGym);
+router.put('/gyms/:gymId/freeze', allowBoth, adminController.freezeGym);
+router.put('/gyms/:gymId/suspend', allowBoth, adminController.suspendGym);
 
-// ==========================================
-// ROUTE: /GYMS/:GYMID/ACTIVATE
-// ==========================================
-router.put('/gyms/:gymId/activate', adminController.activateGym);
+router.route('/gyms/:gymId/profile')
+  .get(allowBoth, adminController.getGymProfile);
 
-// ==========================================
-// ROUTE: /GYMS/:GYMID/FREEZE
-// ==========================================
-router.put('/gyms/:gymId/freeze', adminController.freezeGym);
+router.put('/gyms/:gymId/quota', onlyOwner, adminController.updateGymQuota);
 
-// ==========================================
-// ROUTE: /GYMS/:GYMID/SUSPEND
-// ==========================================
-router.put('/gyms/:gymId/suspend', adminController.suspendGym);
-
-
-// ==========================================
-// ROUTE: /GYMS/:GYMID
-// ==========================================
 router.route('/gyms/:gymId')
-  .delete(adminController.deleteGym);
+  .delete(onlyOwner, adminController.deleteGym);
+
+// ==========================================
+// ACTIVITY LOGS
+// ==========================================
+router.get('/activity', onlyOwner, adminController.getPlatformActivityLogs);
+
+// ==========================================
+// SAAS PLATFORM EXPENSES
+// ==========================================
+router.route('/expenses')
+  .get(allowBoth, adminController.getPlatformExpenses)
+  .post(allowBoth, adminController.createPlatformExpense);
+
+router.delete('/expenses/:id', onlyOwner, adminController.deletePlatformExpense);
 
 module.exports = router;
