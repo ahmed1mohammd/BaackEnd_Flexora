@@ -55,6 +55,29 @@ exports.checkIn = catchAsync(async (req, res, next) => {
     });
   }
 
+  // 3.5. Prevent duplicate attendance check-in for the same day
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const existingAttendance = await prisma.attendance.findFirst({
+    where: {
+      memberId: member.id,
+      checkInTime: {
+        gte: todayStart,
+        lte: todayEnd
+      }
+    }
+  });
+
+  if (existingAttendance) {
+    return res.status(400).json({
+      status: 'fail',
+      message: `عذراً، لقد تم تسجيل حضور اللاعب [${member.name}] اليوم بالفعل ولا يمكن تسجيله مجدداً في نفس اليوم.`
+    });
+  }
+
   // 4. Record Attendance with branchId
   const attendance = await prisma.attendance.create({
     data: {
