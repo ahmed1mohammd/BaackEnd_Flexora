@@ -130,7 +130,8 @@ exports.login = catchAsync(async (req, res, next) => {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role
+      role: user.role,
+      baseSalary: user.baseSalary
     },
     gym: {
       id: gym.id,

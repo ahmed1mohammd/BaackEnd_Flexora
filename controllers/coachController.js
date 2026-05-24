@@ -57,6 +57,7 @@ exports.getCoachDashboard = catchAsync(async (req, res, next) => {
       coachEarnings,
       activeClientsCount,
       totalClientsCount: privateClients.length,
+      baseSalary: req.user.baseSalary || 0,
       privateClients: formattedClients
     }
   });
