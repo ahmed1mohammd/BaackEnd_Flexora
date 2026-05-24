@@ -529,11 +529,11 @@ exports.getGymProfile = catchAsync(async (req, res, next) => {
 exports.getAllBranches = catchAsync(async (req, res, next) => {
   const branches = await prisma.branch.findMany({
     orderBy: [
-      { status: 'asc' },   // ACTIVE < INACTIVE < PENDING alphabetically — we re-sort on FE
+      { status: 'asc' },
       { createdAt: 'desc' }
     ],
     include: {
-      gym: { select: { id: true, gymName: true, name: true, email: true } }
+      gym: { select: { id: true, name: true, ownerName: true, email: true } }
     }
   });
 
