@@ -17,6 +17,11 @@ model Gym {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  // Subscription & Plans Details
+  planId           String?
+  planName         String?
+  planPrice        Float?
+
   // Quotas (Limits)
   maxReceptionists Int      @default(1)
   maxCoaches       Int      @default(4)
@@ -29,6 +34,7 @@ model Gym {
   attendances        Attendance[]
   platformPayments   PlatformFinancialLog[]
   activityLogs       ActivityLog[]
+  branches           Branch[]
 }
 
 model User {
@@ -44,6 +50,8 @@ model User {
   updatedAt   DateTime @updatedAt
 
   gym Gym @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
   
   assignedMembers Member[]  @relation("CoachToMember")
   activityLogs    ActivityLog[]
@@ -67,6 +75,8 @@ model Member {
   gym   Gym   @relation(fields: [gymId], references: [id], onDelete: Cascade)
   coach User? @relation("CoachToMember", fields: [coachId], references: [id])
   activePackage Package? @relation(fields: [activePackageId], references: [id])
+  branchId        String?
+  branch          Branch?   @relation(fields: [branchId], references: [id])
   attendances Attendance[]
 }
 
@@ -95,6 +105,8 @@ model FinancialLog {
   description String
   refId       String?
   createdAt   DateTime @default(now())
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
 
   gym Gym @relation(fields: [gymId], references: [id], onDelete: Cascade)
 }
@@ -120,6 +132,8 @@ model Attendance {
 
   gym Gym @relation(fields: [gymId], references: [id], onDelete: Cascade)
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
 }
 
 model PlatformFinancialLog {
@@ -197,4 +211,20 @@ model PlatformSettings {
   showLegalFooter  Boolean  @default(false)
   
   updatedAt        DateTime @updatedAt
+}
+
+model Branch {
+  id        String   @id @default(uuid())
+  gymId     String
+  name      String
+  address   String?
+  status    String   @default("PENDING") // PENDING, ACTIVE
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  gym           Gym            @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  users         User[]
+  members       Member[]
+  financialLogs FinancialLog[]
+  attendances   Attendance[]
 }

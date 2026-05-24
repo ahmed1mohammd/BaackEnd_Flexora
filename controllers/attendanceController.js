@@ -9,7 +9,7 @@ exports.checkIn = catchAsync(async (req, res, next) => {
   const { qrCode } = req.body;
 
   if (!qrCode) {
-    return next(new AppError('Please provide a QR Code', 400));
+    return next(new AppError('يرجى تقديم رمز الهوية الرقمية (QR) للتحقق.', 400));
   }
 
   // 1. Find the member
@@ -18,33 +18,63 @@ exports.checkIn = catchAsync(async (req, res, next) => {
   });
 
   if (!member) {
-    return next(new AppError('Invalid QR Code. Member not found.', 404));
+    return next(new AppError('رمز الهوية الرقمية (QR) غير مسجل أو غير صحيح. يرجى مسح الرمز مجدداً.', 404));
   }
 
   // 2. Security Check: Same Gym?
   if (member.gymId !== req.user.gymId) {
-    return next(new AppError('Unauthorized. This member belongs to another gym.', 403));
+    return next(new AppError('عذراً، هذا المشترك غير تابع لهذه الصالة الرياضية.', 403));
   }
 
   // 3. Status Check
-  if (member.status !== 'active') {
+  if (member.status === 'frozen') {
     return res.status(403).json({
       status: 'fail',
-      message: `Access Denied. Member status is ${member.status}.`
+      message: `عذراً، حالة العضو الحالية [${member.name}] هي: مجمد مؤقتاً. يرجى مراجعة موظف الاستقبال.`
     });
   }
 
-  // 4. Record Attendance
+  if (member.status === 'expired' || (member.subscriptionEnd && new Date(member.subscriptionEnd) < new Date())) {
+    if (member.status === 'active') {
+      // Auto expire in db
+      await prisma.member.update({
+        where: { id: member.id },
+        data: { status: 'expired' }
+      });
+    }
+    return res.status(403).json({
+      status: 'fail',
+      message: `عذراً، اشتراك العضو [${member.name}] منتهي الصلاحية. يرجى التوجه للاستقبال للتجديد.`
+    });
+  }
+
+  if (member.status !== 'active') {
+    return res.status(403).json({
+      status: 'fail',
+      message: `عذراً، حالة الاشتراك الخاصة باللاعب [${member.name}] هي: غير نشط.`
+    });
+  }
+
+  // 4. Record Attendance with branchId
   const attendance = await prisma.attendance.create({
     data: {
       gymId: member.gymId,
-      memberId: member.id
+      memberId: member.id,
+      branchId: req.user.branchId || null
+    },
+    include: {
+      member: {
+        select: {
+          name: true,
+          activePackage: { select: { name: true } }
+        }
+      }
     }
   });
 
   res.status(200).json({
     status: 'success',
-    message: 'Check-in successful',
+    message: `مرحباً بك كابتن ${member.name}! تم تسجيل الحضور بنجاح. تفضل بالدخول.`,
     data: { attendance }
   });
 });

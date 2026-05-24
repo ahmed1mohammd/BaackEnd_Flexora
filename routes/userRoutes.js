@@ -183,9 +183,10 @@ router.route('/members/:id')
 // Attendance
 
 // ==========================================
-// ROUTE: /ATTENDANCE/CHECK
+// ROUTE: /ATTENDANCE/CHECK & /ATTENDANCE/CHECK-IN
 // ==========================================
 router.post('/attendance/check', authMiddleware.restrictTo('Gym-Owner', 'Receptionist', 'Coach'), attendanceController.checkIn);
+router.post('/attendance/check-in', authMiddleware.restrictTo('Gym-Owner', 'Receptionist', 'Coach'), attendanceController.checkIn);
 
 // Financials (Expenses)
 const financialLogController = require('../controllers/financialLogController');

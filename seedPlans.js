@@ -13,6 +13,8 @@ async function seed() {
       durationInDays: 30, 
       price: 500,
       description: 'الباقة الأساسية',
+      maxReceptionists: 1,
+      maxCoaches: 2,
       features: [
         'أتمتة ملفات واشتراكات الأعضاء الأساسية',
         'توليد وتشفير كود الدخول الرقمي (QR)',
@@ -24,6 +26,8 @@ async function seed() {
       durationInDays: 90, 
       price: 1200,
       description: 'الباقة المتقدمة',
+      maxReceptionists: 2,
+      maxCoaches: 4,
       features: [
         'توفير مالي بمعدل 20% مقارنة بالدفع الشهري',
         'لوحة التقارير المالية والإحصائيات التحليلية',
@@ -36,6 +40,8 @@ async function seed() {
       durationInDays: 180, 
       price: 2200,
       description: 'الباقة الاحترافية',
+      maxReceptionists: 3,
+      maxCoaches: 6,
       features: [
         'توفير مالي بمعدل 27% مقارنة بالدفع الشهري',
         'تفعيل محرك المحاسبة المالي الموحد V2 بالكامل',
@@ -48,6 +54,8 @@ async function seed() {
       durationInDays: 365, 
       price: 4000,
       description: 'منظومة الأعمال الشاملة',
+      maxReceptionists: 5,
+      maxCoaches: 12,
       features: [
         'توفير استثنائي بمعدل 33% من القيمة الإجمالية',
         'إدارة وحسابات فروع متعددة ومنفصلة (Multi-Branch Core)',

@@ -84,4 +84,9 @@ router.route('/expenses')
 
 router.delete('/expenses/:id', onlyOwner, adminController.deletePlatformExpense);
 
+// ==========================================
+// APPROVE BRANCH
+// ==========================================
+router.put('/branches/:id/approve', allowBoth, adminController.approveBranch);
+
 module.exports = router;

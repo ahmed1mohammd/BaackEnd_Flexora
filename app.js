@@ -44,8 +44,14 @@ app.get('/', (req, res) => {
 
 // Routes
 // Note: No '/api' prefix as requested
+const gymRoutes = require('./routes/gymRoutes');
+app.use('/gym', gymRoutes);
 app.use('/admin', adminRoutes);
 app.use('/user', userRoutes);
+
+// Public SaaS Plans Route (For Landing Page Pricing Hydration)
+const adminController = require('./controllers/adminController');
+app.get('/api/saas-plans', adminController.getSaasPlans);
 
 // Public Settings Route (For Landing Page)
 const prisma = require('./prisma/client');

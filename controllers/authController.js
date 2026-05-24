@@ -14,7 +14,7 @@ const signToken = id => {
 // REGISTER
 // ==========================================
 exports.register = catchAsync(async (req, res, next) => {
-  const { gymName, ownerName, email, phoneNumber, password, address, planId } = req.body;
+  const { gymName, ownerName, email, phoneNumber, password, address, planId, tier } = req.body;
 
   // Hash password
   const hashedPassword = await bcrypt.hash(password, 12);
@@ -23,12 +23,28 @@ exports.register = catchAsync(async (req, res, next) => {
   const result = await prisma.$transaction(async (tx) => {
     let maxReceptionists = 1;
     let maxCoaches = 4;
+    let registeredPlanName = null;
+    let registeredPlanPrice = null;
 
     if (planId) {
       const plan = await tx.saasPlan.findUnique({ where: { id: planId } });
       if (plan) {
-        maxReceptionists = plan.maxReceptionists || 1;
-        maxCoaches = plan.maxCoaches || 4;
+        maxReceptionists = plan.maxReceptionists !== undefined ? plan.maxReceptionists : 1;
+        maxCoaches = plan.maxCoaches !== undefined ? plan.maxCoaches : 4;
+        registeredPlanName = plan.planName;
+        registeredPlanPrice = plan.price;
+      }
+    } else if (tier) {
+      const upperTier = tier.toUpperCase();
+      if (upperTier === 'PREMIUM') {
+        maxReceptionists = 1;
+        maxCoaches = 2;
+      } else if (upperTier === 'ELITE') {
+        maxReceptionists = 1;
+        maxCoaches = 4;
+      } else if (upperTier === 'ULTIMATE') {
+        maxReceptionists = 3;
+        maxCoaches = 8;
       }
     }
 
@@ -39,7 +55,11 @@ exports.register = catchAsync(async (req, res, next) => {
         email,
         address,
         maxReceptionists,
-        maxCoaches
+        maxCoaches,
+        status: 'pending',
+        planId: planId || null,
+        planName: registeredPlanName,
+        planPrice: registeredPlanPrice
       }
     });
 

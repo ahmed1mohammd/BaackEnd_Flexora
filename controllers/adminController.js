@@ -214,36 +214,87 @@ exports.getAllGyms = catchAsync(async (req, res, next) => {
 // ACTIVATE GYM
 // ==========================================
 exports.activateGym = catchAsync(async (req, res, next) => {
-  const { durationInMonths, price } = req.body;
+  const { durationInMonths, price, planId } = req.body;
   const gymId = req.params.gymId;
 
-  if (!durationInMonths || price === undefined) {
-    return next(new AppError('Please provide durationInMonths and price', 400));
+  if (!planId && (!durationInMonths || price === undefined)) {
+    return next(new AppError('يرجى تقديم معرّف الباقة أو المدة والسعر يدوياً لتفعيل الاشتراك.', 400));
   }
 
   const result = await prisma.$transaction(async (tx) => {
     const gym = await tx.gym.findUnique({ where: { id: gymId } });
     if (!gym) throw new AppError('Gym not found', 404);
 
-    // Calculate new subscription end date
-    const subscriptionEnd = new Date();
-    subscriptionEnd.setMonth(subscriptionEnd.getMonth() + durationInMonths);
+    let maxReceptionists = 1;
+    let maxCoaches = 4;
+    let subscriptionEnd = new Date();
+    let finalPrice = price;
+    let finalPlanId = planId || null;
+    let finalPlanName = null;
+    let finalPlanPrice = null;
+    let planDurationDays = 0;
+
+    if (planId) {
+      const plan = await tx.saasPlan.findUnique({ where: { id: planId } });
+      if (!plan) throw new AppError('عذراً، لم يتم العثور على الباقة المحددة في النظام.', 404);
+
+      maxReceptionists = plan.maxReceptionists;
+      maxCoaches = plan.maxCoaches;
+      finalPrice = plan.price;
+      finalPlanId = plan.id;
+      finalPlanName = plan.planName;
+      finalPlanPrice = plan.price;
+      planDurationDays = plan.durationInDays;
+
+      // Calculate end date based on durationInDays from today
+      subscriptionEnd.setDate(subscriptionEnd.getDate() + plan.durationInDays);
+    } else {
+      planDurationDays = durationInMonths * 30;
+      subscriptionEnd.setMonth(subscriptionEnd.getMonth() + durationInMonths);
+
+      // Find the closest SaasPlan by duration in days
+      const plans = await tx.saasPlan.findMany();
+      let matchedPlan = null;
+      let minDiff = Infinity;
+      for (const plan of plans) {
+        const diff = Math.abs(plan.durationInDays - planDurationDays);
+        if (diff < minDiff) {
+          minDiff = diff;
+          matchedPlan = plan;
+        }
+      }
+
+      if (matchedPlan) {
+        maxReceptionists = matchedPlan.maxReceptionists;
+        maxCoaches = matchedPlan.maxCoaches;
+        finalPlanId = matchedPlan.id;
+        finalPlanName = matchedPlan.planName;
+        finalPlanPrice = price !== undefined ? price : matchedPlan.price;
+      } else {
+        finalPlanPrice = price;
+      }
+    }
 
     const updatedGym = await tx.gym.update({
       where: { id: gymId },
       data: {
         status: 'active',
-        subscriptionEnd
+        subscriptionEnd,
+        maxReceptionists,
+        maxCoaches,
+        planId: finalPlanId,
+        planName: finalPlanName,
+        planPrice: finalPlanPrice
       }
     });
 
     // Record Platform Income
-    if (price > 0) {
+    if (finalPrice > 0) {
       await tx.platformFinancialLog.create({
         data: {
           gymId,
-          amount: price,
-          description: `SaaS Subscription Activation for ${durationInMonths} months`
+          amount: finalPrice,
+          description: `تفعيل الاشتراك في باقة: ${finalPlanName || 'باقة مخصصة'} بقيمة ${finalPrice} ج.م لمدة ${planDurationDays} يوم`
         }
       });
     }
@@ -351,7 +402,7 @@ exports.getPlatformDashboard = catchAsync(async (req, res, next) => {
 // CREATE SAAS PLAN
 // ==========================================
 exports.createSaasPlan = catchAsync(async (req, res, next) => {
-  const { planName, durationInDays, price, description, features } = req.body;
+  const { planName, durationInDays, price, description, features, maxReceptionists, maxCoaches } = req.body;
 
   if (!planName || durationInDays === undefined || price === undefined) {
     return next(new AppError('Please provide planName, durationInDays, and price', 400));
@@ -363,7 +414,9 @@ exports.createSaasPlan = catchAsync(async (req, res, next) => {
       durationInDays: parseInt(durationInDays, 10),
       price: parseFloat(price),
       description: description || '',
-      features: Array.isArray(features) ? features : []
+      features: Array.isArray(features) ? features : [],
+      maxReceptionists: maxReceptionists !== undefined ? parseInt(maxReceptionists, 10) : 1,
+      maxCoaches: maxCoaches !== undefined ? parseInt(maxCoaches, 10) : 4
     }
   });
 
@@ -392,7 +445,7 @@ exports.getSaasPlans = catchAsync(async (req, res, next) => {
 // ==========================================
 exports.updateSaasPlan = catchAsync(async (req, res, next) => {
   const { planId } = req.params;
-  const { planName, durationInDays, price, description, features } = req.body;
+  const { planName, durationInDays, price, description, features, maxReceptionists, maxCoaches } = req.body;
 
   const existing = await prisma.saasPlan.findUnique({ where: { id: planId } });
   if (!existing) {
@@ -407,6 +460,8 @@ exports.updateSaasPlan = catchAsync(async (req, res, next) => {
       ...(price          !== undefined && { price: parseFloat(price) }),
       ...(description    !== undefined && { description }),
       ...(features       !== undefined && { features: Array.isArray(features) ? features : [] }),
+      ...(maxReceptionists !== undefined && { maxReceptionists: parseInt(maxReceptionists, 10) }),
+      ...(maxCoaches       !== undefined && { maxCoaches: parseInt(maxCoaches, 10) }),
     }
   });
 
@@ -613,5 +668,31 @@ exports.updatePlatformSettings = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: 'success',
     data: { settings: updatedSettings }
+  });
+});
+
+// ==========================================
+// APPROVE BRANCH (Super-Admin)
+// ==========================================
+exports.approveBranch = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+
+  const branch = await prisma.branch.findUnique({
+    where: { id }
+  });
+
+  if (!branch) {
+    return next(new AppError('عذراً، لم يتم العثور على الفرع المطلوب.', 404));
+  }
+
+  const updatedBranch = await prisma.branch.update({
+    where: { id },
+    data: { status: 'ACTIVE' }
+  });
+
+  res.status(200).json({
+    status: 'success',
+    message: 'تم تفعيل واعتماد الفرع بنجاح وتشغيله في المنظومة.',
+    data: { branch: updatedBranch }
   });
 });
