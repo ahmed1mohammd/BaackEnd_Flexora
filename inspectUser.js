@@ -5,7 +5,7 @@ async function inspect() {
   try {
     const user = await prisma.user.findFirst({
       where: {
-        email: 'ezog1520@gmail.com'
+        email: 'capahmed@gmail.com'
       },
       include: {
         gym: true
@@ -19,6 +19,7 @@ async function inspect() {
       console.log(`Role: ${user.role}`);
       console.log(`Gym ID: ${user.gymId}`);
       console.log(`Gym Name: ${user.gym?.name}`);
+      console.log(`Gym Status: ${user.gym?.status}`);
       console.log(`Gym MaxReceptionists: ${user.gym?.maxReceptionists}`);
       console.log(`Gym MaxCoaches: ${user.gym?.maxCoaches}`);
     } else {

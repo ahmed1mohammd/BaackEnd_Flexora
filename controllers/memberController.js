@@ -30,8 +30,15 @@ const notifyWhatsApp = async (gymId, phoneNumber, message, qrCode) => {
 // GET ALL MEMBERS
 // ==========================================
 exports.getAllMembers = catchAsync(async (req, res, next) => {
+  const queryFilter = { gymId: req.user.gymId };
+  
+  // If user is a coach, filter to only return members assigned to this coach
+  if (req.user.role === 'Coach') {
+    queryFilter.coachId = req.user.id;
+  }
+
   const members = await prisma.member.findMany({
-    where: { gymId: req.user.gymId },
+    where: queryFilter,
     include: {
       coach: { select: { name: true } },
       activePackage: { select: { name: true, durationInDays: true } },
