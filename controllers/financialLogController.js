@@ -9,8 +9,11 @@ exports.getAllLogs = catchAsync(async (req, res, next) => {
   const { type } = req.query; // Optional filter: ?type=expense
   
   const whereClause = { gymId: req.user.gymId };
-  if (type) {
-    whereClause.type = type;
+  if (type) whereClause.type = type;
+
+  // Scope to branch if requester is Receptionist or Coach
+  if ((req.user.role === 'Receptionist' || req.user.role === 'Coach') && req.user.branchId) {
+    whereClause.branchId = req.user.branchId;
   }
 
   const logs = await prisma.financialLog.findMany({
@@ -35,14 +38,15 @@ exports.createExpense = catchAsync(async (req, res, next) => {
     return next(new AppError('Please provide category, amount, and description', 400));
   }
 
-  // Force type to 'expense'
+  // Force type to 'expense', auto-attach branch from logged-in user
   const newExpense = await prisma.financialLog.create({
     data: {
       gymId: req.user.gymId,
       type: 'expense',
       category,
       amount,
-      description
+      description,
+      branchId: req.user.branchId || null
     }
   });
 

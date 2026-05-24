@@ -37,6 +37,11 @@ exports.getAllMembers = catchAsync(async (req, res, next) => {
     queryFilter.coachId = req.user.id;
   }
 
+  // If user is a Receptionist, scope to their branch
+  if (req.user.role === 'Receptionist' && req.user.branchId) {
+    queryFilter.branchId = req.user.branchId;
+  }
+
   const members = await prisma.member.findMany({
     where: queryFilter,
     include: {

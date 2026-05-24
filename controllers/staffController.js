@@ -7,11 +7,18 @@ const AppError = require('../utils/AppError');
 // GET ALL STAFF
 // ==========================================
 exports.getAllStaff = catchAsync(async (req, res, next) => {
+  const whereClause = { 
+    gymId: req.user.gymId,
+    role: { in: ['Coach', 'Receptionist'] }
+  };
+
+  // If the requester is a Receptionist or Coach, scope to their branch only
+  if ((req.user.role === 'Receptionist' || req.user.role === 'Coach') && req.user.branchId) {
+    whereClause.branchId = req.user.branchId;
+  }
+
   const staff = await prisma.user.findMany({
-    where: { 
-      gymId: req.user.gymId,
-      role: { in: ['Coach', 'Receptionist'] }
-    },
+    where: whereClause,
     select: {
       id: true,
       name: true,
@@ -20,7 +27,8 @@ exports.getAllStaff = catchAsync(async (req, res, next) => {
       role: true,
       baseSalary: true,
       branchId: true,
-      createdAt: true
+      createdAt: true,
+      branch: { select: { id: true, name: true } }
     }
   });
 
@@ -35,11 +43,26 @@ exports.getAllStaff = catchAsync(async (req, res, next) => {
 // CREATE STAFF
 // ==========================================
 exports.createStaff = catchAsync(async (req, res, next) => {
-  const { name, email, phoneNumber, password, role, baseSalary } = req.body;
+  const { name, email, phoneNumber, password, role, baseSalary, branchId } = req.body;
   const gymId = req.user.gymId;
 
   if (role === 'Platform-Owner') {
     return next(new AppError('Cannot create Platform-Owner from here', 400));
+  }
+
+  // branchId is required for Receptionist and Coach
+  if ((role === 'Receptionist' || role === 'Coach') && !branchId) {
+    return next(new AppError('يرجى تحديد الفرع التابع له الموظف. الفرع حقل إلزامي.', 400));
+  }
+
+  // Verify the branch belongs to this gym
+  if (branchId) {
+    const branch = await prisma.branch.findFirst({
+      where: { id: branchId, gymId, status: 'ACTIVE' }
+    });
+    if (!branch) {
+      return next(new AppError('الفرع المحدد غير موجود أو غير مفعّل. يرجى التحقق من الفروع النشطة.', 400));
+    }
   }
 
   // Check if email already exists in system
@@ -86,7 +109,7 @@ exports.createStaff = catchAsync(async (req, res, next) => {
       password: hashedPassword,
       role,
       baseSalary: baseSalary || 0,
-      branchId: req.body.branchId || null
+      branchId: branchId || null
     },
     select: { id: true, name: true, email: true, role: true, branchId: true }
   });
