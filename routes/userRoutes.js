@@ -148,21 +148,19 @@ router.route('/packages/:id')
   .delete(authMiddleware.restrictTo('Gym-Owner'), packageController.deletePackage);
 
 // Staff Management
-router.use('/staff', authMiddleware.restrictTo('Gym-Owner'));
-
 // ==========================================
 // ROUTE: /STAFF
 // ==========================================
 router.route('/staff')
-  .get(staffController.getAllStaff)
-  .post(staffController.createStaff);
+  .get(authMiddleware.restrictTo('Gym-Owner', 'Receptionist'), staffController.getAllStaff)
+  .post(authMiddleware.restrictTo('Gym-Owner'), staffController.createStaff);
 
 // ==========================================
 // ROUTE: /STAFF/:ID
 // ==========================================
 router.route('/staff/:id')
-  .put(staffController.updateStaff)
-  .delete(staffController.deleteStaff);
+  .put(authMiddleware.restrictTo('Gym-Owner'), staffController.updateStaff)
+  .delete(authMiddleware.restrictTo('Gym-Owner'), staffController.deleteStaff);
 
 // Member Management
 
