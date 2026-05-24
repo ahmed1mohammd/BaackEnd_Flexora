@@ -35,16 +35,27 @@ exports.register = catchAsync(async (req, res, next) => {
         registeredPlanPrice = plan.price;
       }
     } else if (tier) {
+      // Try to match a DB plan by tier name or use sensible defaults
+      const allPlans = await tx.saasPlan.findMany({ orderBy: { price: 'asc' } });
       const upperTier = tier.toUpperCase();
-      if (upperTier === 'PREMIUM') {
-        maxReceptionists = 1;
-        maxCoaches = 2;
-      } else if (upperTier === 'ELITE') {
+      let matchedPlan = null;
+
+      // Try to find plan by name match first
+      if (allPlans.length > 0) {
+        matchedPlan = allPlans.find(p =>
+          p.planName.toUpperCase().includes(upperTier)
+        ) || allPlans[0]; // fallback to cheapest plan
+      }
+
+      if (matchedPlan) {
+        maxReceptionists = matchedPlan.maxReceptionists ?? 1;
+        maxCoaches = matchedPlan.maxCoaches ?? 4;
+        registeredPlanName = matchedPlan.planName;
+        registeredPlanPrice = matchedPlan.price;
+      } else {
+        // Final fallback: conservative defaults if no DB plans exist
         maxReceptionists = 1;
         maxCoaches = 4;
-      } else if (upperTier === 'ULTIMATE') {
-        maxReceptionists = 3;
-        maxCoaches = 8;
       }
     }
 

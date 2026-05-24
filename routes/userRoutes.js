@@ -24,7 +24,7 @@ router.get('/plans', async (req, res) => {
     });
     
     if (dbPlans && dbPlans.length > 0) {
-      // Map database schema fields to response fields
+      // Return all plan fields including quota limits
       const plans = dbPlans.map(plan => ({
         id: plan.id,
         name: plan.planName,
@@ -32,7 +32,9 @@ router.get('/plans', async (req, res) => {
         durationInDays: plan.durationInDays,
         price: plan.price,
         description: plan.description || '',
-        features: plan.features || []
+        features: plan.features || [],
+        maxReceptionists: plan.maxReceptionists ?? 1,
+        maxCoaches: plan.maxCoaches ?? 4,
       }));
       
       return res.status(200).json({
@@ -40,69 +42,19 @@ router.get('/plans', async (req, res) => {
         data: { plans }
       });
     }
+
+    // No plans in DB yet
+    return res.status(200).json({
+      status: 'success',
+      data: { plans: [] }
+    });
   } catch (error) {
     console.error('Error fetching plans from DB:', error.message);
+    return res.status(500).json({
+      status: 'error',
+      message: 'فشل تحميل خطط الاشتراك من الخادم. يرجى المحاولة لاحقاً.'
+    });
   }
-  
-  // Fallback if DB query fails or has no plans
-  res.status(200).json({
-    status: 'success',
-    data: {
-      plans: [
-        { 
-          id: 'tier1', 
-          name: 'الباقة الأساسية (1 شهر)', 
-          durationInDays: 30, 
-          price: 500, 
-          description: 'الباقة الأساسية',
-          features: [
-            'أتمتة ملفات واشتراكات الأعضاء الأساسية',
-            'توليد وتشفير كود الدخول الرقمي (QR)',
-            'صلاحية وصول لواجهة استقبال واحدة (Reception Desk)'
-          ]
-        },
-        { 
-          id: 'tier2', 
-          name: 'الباقة المتقدمة (3 أشهر) — الأكثر طلباً', 
-          durationInDays: 90, 
-          price: 1200, 
-          description: 'الباقة المتقدمة', 
-          features: [
-            'توفير مالي بمعدل 20% مقارنة بالدفع الشهري',
-            'لوحة التقارير المالية والإحصائيات التحليلية',
-            'توليد وطباعة بطاقات العضوية المشفرة (CR80)',
-            'صلاحيات منفصلة للإدارة العليا وطاقم الاستقبال'
-          ]
-        },
-        { 
-          id: 'tier3', 
-          name: 'الباقة الاحترافية (6 أشهر)', 
-          durationInDays: 180, 
-          price: 2200, 
-          description: 'الباقة الاحترافية', 
-          features: [
-            'توفير مالي بمعدل 27% مقارنة بالدفع الشهري',
-            'تفعيل محرك المحاسبة المالي الموحد V2 بالكامل',
-            'ربط بوابات الحضور الإلكترونية الذكية بشكل غير محدود',
-            'دعم فني مخصص وخط ساخن للاستشارات التقنية'
-          ]
-        },
-        { 
-          id: 'tier4', 
-          name: 'منظومة الأعمال الشاملة (سنة كاملة) — أفضل قيمة', 
-          durationInDays: 365, 
-          price: 4000, 
-          description: 'منظومة الأعمال الشاملة', 
-          features: [
-            'توفير استثنائي بمعدل 33% من القيمة الإجمالية',
-            'إدارة وحسابات فروع متعددة ومنفصلة (Multi-Branch Core)',
-            'تصدير فوري لكافة التقارير المالية والمحاسبية لملفات Excel/PDF',
-            'أولوية قصوى في الدعم التقني وجلسات استشارية لتطوير الأعمال'
-          ]
-        }
-      ]
-    }
-  });
 });
 
 // ==========================================

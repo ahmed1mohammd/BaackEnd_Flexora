@@ -7,6 +7,12 @@ const catchAsync = require('../utils/catchAsync');
 exports.getStats = catchAsync(async (req, res, next) => {
   const gymId = req.user.gymId;
 
+  // 0. Fetch gym quota info
+  const gym = await prisma.gym.findUnique({
+    where: { id: gymId },
+    select: { maxReceptionists: true, maxCoaches: true, planName: true }
+  });
+
   // 1. Complex Aggregation for Financials using Prisma groupBy
   const financials = await prisma.financialLog.groupBy({
     by: ['type'],
@@ -108,7 +114,11 @@ exports.getStats = catchAsync(async (req, res, next) => {
       },
       activePlayers,
       liveAttendance,
-      branchBreakdown
+      branchBreakdown,
+      // Gym quota info for staff management UI
+      maxReceptionists: gym?.maxReceptionists ?? 1,
+      maxCoaches: gym?.maxCoaches ?? 4,
+      planName: gym?.planName || null,
     }
   });
 });
