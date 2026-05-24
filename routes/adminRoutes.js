@@ -89,4 +89,9 @@ router.delete('/expenses/:id', onlyOwner, adminController.deletePlatformExpense)
 // ==========================================
 router.put('/branches/:id/approve', allowBoth, adminController.approveBranch);
 
+// ==========================================
+// GET ALL BRANCHES (across all gyms)
+// ==========================================
+router.get('/branches', allowBoth, adminController.getAllBranches);
+
 module.exports = router;

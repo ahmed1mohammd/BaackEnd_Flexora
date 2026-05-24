@@ -503,6 +503,9 @@ exports.getGymProfile = catchAsync(async (req, res, next) => {
     include: {
       users: {
         select: { id: true, name: true, email: true, role: true, createdAt: true }
+      },
+      branches: {
+        orderBy: { createdAt: 'desc' }
       }
     }
   });
@@ -511,12 +514,33 @@ exports.getGymProfile = catchAsync(async (req, res, next) => {
     return next(new AppError('Gym not found', 404));
   }
 
-  const staff = gym.users.filter(u => u.role === 'Receptionist' || u.role === 'Coach');
+  const staff  = gym.users.filter(u => u.role === 'Receptionist' || u.role === 'Coach');
   const owners = gym.users.filter(u => u.role === 'Gym-Owner');
 
   res.status(200).json({
     status: 'success',
     data: { gym, owners, staff }
+  });
+});
+
+// ==========================================
+// GET ALL BRANCHES (Admin — across all gyms)
+// ==========================================
+exports.getAllBranches = catchAsync(async (req, res, next) => {
+  const branches = await prisma.branch.findMany({
+    orderBy: [
+      { status: 'asc' },   // ACTIVE < INACTIVE < PENDING alphabetically — we re-sort on FE
+      { createdAt: 'desc' }
+    ],
+    include: {
+      gym: { select: { id: true, gymName: true, name: true, email: true } }
+    }
+  });
+
+  res.status(200).json({
+    status: 'success',
+    results: branches.length,
+    data: { branches }
   });
 });
 
