@@ -28,8 +28,9 @@ exports.checkIn = catchAsync(async (req, res, next) => {
 
   // 3. Status Check
   if (member.status === 'frozen') {
-    return res.status(403).json({
+    return res.status(400).json({
       status: 'fail',
+      code: 'MEMBER_FROZEN',
       message: `عذراً، حالة العضو الحالية [${member.name}] هي: مجمد مؤقتاً. يرجى مراجعة موظف الاستقبال.`
     });
   }
@@ -42,15 +43,17 @@ exports.checkIn = catchAsync(async (req, res, next) => {
         data: { status: 'expired' }
       });
     }
-    return res.status(403).json({
+    return res.status(400).json({
       status: 'fail',
+      code: 'MEMBER_EXPIRED',
       message: `عذراً، اشتراك العضو [${member.name}] منتهي الصلاحية. يرجى التوجه للاستقبال للتجديد.`
     });
   }
 
   if (member.status !== 'active') {
-    return res.status(403).json({
+    return res.status(400).json({
       status: 'fail',
+      code: 'MEMBER_INACTIVE',
       message: `عذراً، حالة الاشتراك الخاصة باللاعب [${member.name}] هي: غير نشط.`
     });
   }
