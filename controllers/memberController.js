@@ -11,20 +11,59 @@ const isUuid = (str) => {
 };
 
 // Helper to notify via WhatsApp microservice
-const notifyWhatsApp = async (gymId, phoneNumber, message, qrCode) => {
+// Calls POST {WHATSAPP_SERVICE_URL}/api/whatsapp/send-welcome
+// with the correct payload and x-api-key header
+const notifyWhatsApp = async (gymId, phoneNumber, playerName, attendanceUUID) => {
+  const baseUrl = process.env.WHATSAPP_SERVICE_URL;
+  const apiKey  = process.env.WA_API_KEY;
+
+  if (!baseUrl) {
+    console.warn('[WA Bridge] WHATSAPP_SERVICE_URL not set — skipping notification.');
+    return;
+  }
+
   try {
-    if (process.env.WHATSAPP_SERVICE_URL) {
-      await axios.post(process.env.WHATSAPP_SERVICE_URL, {
-        gymId,
-        phoneNumber,
-        message,
-        qrCode
-      });
-    }
+    await axios.post(
+      `${baseUrl}/api/whatsapp/send-welcome`,
+      { gymId, phone: phoneNumber, playerName, attendanceUUID },
+      {
+        headers: {
+          'x-api-key': apiKey || '',
+          'Content-Type': 'application/json',
+        },
+        timeout: 10_000, // Don't block the main flow for more than 10s
+      }
+    );
+    console.log(`[WA Bridge] Welcome message dispatched for ${phoneNumber} (gym: ${gymId})`);
   } catch (err) {
-    console.error('WhatsApp notification failed:', err.message);
+    // Non-blocking — log but don't fail the member registration
+    console.error('[WA Bridge] Notification failed:', err.response?.data?.error || err.message);
   }
 };
+
+// Helper to send a subscription reminder via WhatsApp
+// Calls POST {WHATSAPP_SERVICE_URL}/api/whatsapp/send-reminder
+const sendWhatsAppReminder = async (gymId, phoneNumber, playerName, daysLeft) => {
+  const baseUrl = process.env.WHATSAPP_SERVICE_URL;
+  const apiKey  = process.env.WA_API_KEY;
+
+  if (!baseUrl) return;
+
+  try {
+    await axios.post(
+      `${baseUrl}/api/whatsapp/send-reminder`,
+      { gymId, phone: phoneNumber, playerName, daysLeft },
+      {
+        headers: { 'x-api-key': apiKey || '', 'Content-Type': 'application/json' },
+        timeout: 10_000,
+      }
+    );
+    console.log(`[WA Bridge] Reminder dispatched for ${phoneNumber} — ${daysLeft} days left`);
+  } catch (err) {
+    console.error('[WA Bridge] Reminder failed:', err.response?.data?.error || err.message);
+  }
+};
+
 
 // ==========================================
 // GET ALL MEMBERS
@@ -160,8 +199,8 @@ exports.createMember = catchAsync(async (req, res, next) => {
     return { newMember, pkg };
   });
 
-  const message = `Welcome to Flexora, ${name}! Your subscription to ${result.pkg.name} is active until ${result.newMember.subscriptionEnd.toDateString()}.`;
-  await notifyWhatsApp(req.user.gymId, phoneNumber, message, result.newMember.qrCode);
+  // Fire-and-forget WA welcome message with QR image pass
+  notifyWhatsApp(req.user.gymId, phoneNumber, name, result.newMember.qrCode);
 
   res.status(201).json({
     status: 'success',
@@ -244,4 +283,6 @@ exports.deleteMember = catchAsync(async (req, res, next) => {
   });
 });
 
-exports.notifyWhatsApp = notifyWhatsApp;
+exports.notifyWhatsApp       = notifyWhatsApp;
+exports.sendWhatsAppReminder = sendWhatsAppReminder;
+
